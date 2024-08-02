@@ -22,7 +22,9 @@ using Robust.Shared.Prototypes;
 using Robust.Shared.Random;
 using Robust.Shared.Timing;
 using System.Linq;
-
+using Content.Shared.Atmos;
+using Robust.Shared.Map;
+using Robust.Shared.Spawners;
 using TimedDespawnComponent = Robust.Shared.Spawners.TimedDespawnComponent;
 
 namespace Content.Server.Fluids.EntitySystems;
@@ -45,6 +47,8 @@ public sealed class SmokeSystem : EntitySystem
     [Dependency] private readonly SharedBroadphaseSystem _broadphase = default!;
     [Dependency] private readonly SharedPhysicsSystem _physics = default!;
     [Dependency] private readonly SolutionContainerSystem _solutionContainerSystem = default!;
+    [Dependency] private readonly Atmos.EntitySystems.AtmosphereSystem _atmosphere = default!;
+    [Dependency] private readonly PuddleSystem _puddle = default!;
 
     private EntityQuery<SmokeComponent> _smokeQuery;
     private EntityQuery<SmokeAffectedComponent> _smokeAffectedQuery;
@@ -62,6 +66,7 @@ public sealed class SmokeSystem : EntitySystem
         SubscribeLocalEvent<SmokeComponent, ReactionAttemptEvent>(OnReactionAttempt);
         SubscribeLocalEvent<SmokeComponent, SolutionRelayEvent<ReactionAttemptEvent>>(OnReactionAttempt);
         SubscribeLocalEvent<SmokeComponent, SpreadNeighborsEvent>(OnSmokeSpread);
+        SubscribeLocalEvent<SmokeComponent, TimedDespawnEvent>(OnTimedDespawn);
     }
 
     /// <inheritdoc/>
@@ -209,6 +214,39 @@ public sealed class SmokeSystem : EntitySystem
             OnReactionAttempt(entity, ref args.Event);
     }
 
+    private void OnTimedDespawn(Entity<SmokeComponent> ent, ref TimedDespawnEvent args)
+    {
+        HandleSmokeDissipation(ent, ent.Comp);
+    }
+
+    private void HandleSmokeDissipation(EntityUid uid, SmokeComponent smoke)
+    {
+        if (!_solutionContainerSystem.ResolveSolution(uid, SmokeComponent.SolutionName, ref smoke.Solution, out var solution) || !solution.Any())
+            return;
+
+        if (!TryComp<TransformComponent>(uid, out var xform))
+            return;
+
+        if (!TryComp<MapGridComponent>(xform.GridUid, out var mapGrid))
+            return;
+
+        var tile = _map.GetTileRef(xform.GridUid.Value, mapGrid, xform.Coordinates);
+
+        // Get the temperature and pressure of the tile
+        var tileMixture = _atmosphere.GetTileMixture(xform.GridUid, xform.MapUid, tile.GridIndices);
+        var tileTemp = tileMixture?.Temperature ?? Atmospherics.T20C;
+        var tilePressure = tileMixture?.Pressure ?? Atmospherics.OneAtmosphere;
+
+        // Calculate puddle chance based on temperature and pressure
+        var puddleChance = CalculatePuddleChance(solution, tileTemp, tilePressure);
+
+        // Attempt to create a puddle for the whole solution
+        if (_random.Prob(puddleChance))
+            CreatePuddle(tile, solution, tileTemp, tilePressure);
+
+        // The smoke entity will be automatically deleted by the TimedDespawnComponent
+    }
+
     /// <summary>
     /// Sets up a smoke component for spreading.
     /// </summary>
@@ -317,6 +355,71 @@ public sealed class SmokeSystem : EntitySystem
             var reagent = _prototype.Index<ReagentPrototype>(reagentQuantity.Reagent.Prototype);
             reagent.ReactionTile(tile, reagentQuantity.Quantity, EntityManager);
         }
+    }
+
+    private float CalculatePuddleChance(Solution solution, float tileTemp, float tilePressure)
+    {
+        if (!_random.Prob(0.2f) || solution.Volume == FixedPoint2.Zero)
+            return 0f;
+
+        var avgBoilingPoint = GetAverageBoilingPoint(solution);
+        var tempDifference = Math.Max(0, avgBoilingPoint - tileTemp);
+        var maxTempDifference = avgBoilingPoint - 293.15f; // Assuming room temperature is 20°C (293.15K)
+
+        var tempChance = Math.Clamp(tempDifference / maxTempDifference, 0f, 1f);
+
+        // Early exit if temperature chance is too low
+        if (tempChance < 0.01f)
+            return 0f;
+
+        float pressureDifference = tilePressure - Atmospherics.OneAtmosphere;
+        float maxPressureDifference = 2 * Atmospherics.OneAtmosphere;
+        var pressureChance = tilePressure > 2 * Atmospherics.OneAtmosphere ? 1f : Math.Clamp((pressureDifference + Atmospherics.OneAtmosphere) / maxPressureDifference, 0f, 1f);
+
+        if (pressureChance < 0.01f)
+            return 0f;
+
+        return (tempChance + pressureChance) / 2f;
+    }
+
+    private float GetAverageBoilingPoint(Solution solution)
+    {
+        float totalBoilingPoint = 0f;
+        float totalQuantity = 0f;
+
+        foreach (var (reagentId, quantity) in solution.Contents)
+        {
+            if (_prototype.TryIndex<ReagentPrototype>(reagentId.Prototype, out var proto))
+            {
+                if (proto.BoilingPoint.HasValue)
+                {
+                    totalBoilingPoint += proto.BoilingPoint.Value * (float)quantity.Float();
+                    totalQuantity += (float)quantity.Float();
+                }
+            }
+        }
+
+        return totalQuantity > 0 ? totalBoilingPoint / totalQuantity : 373.15f; // Default to water's boiling point if unknown
+    }
+
+    private void CreatePuddle(TileRef tile, Solution solution, float tileTemp, float tilePressure)
+    {
+        // Calculate the amount of solution to put in the puddle based on temperature and pressure
+        var puddleRatio = CalculatePuddleRatio(solution, tileTemp, tilePressure);
+        var puddleAmount = solution.Volume * puddleRatio;
+        var puddleSolution = solution.SplitSolution(puddleAmount);
+
+        _puddle.TrySpillAt(tile, puddleSolution, out _, false);
+    }
+
+    private float CalculatePuddleRatio(Solution solution, float tileTemp, float tilePressure)
+    {
+        var avgBoilingPoint = GetAverageBoilingPoint(solution);
+        var tempRatio = Math.Clamp((avgBoilingPoint - tileTemp) / avgBoilingPoint, 0f, 1f);
+        var pressureRatio = Math.Clamp(tilePressure / Atmospherics.OneAtmosphere, 0f, 1f);
+
+        // Combine temperature and pressure effects
+        return Math.Clamp(tempRatio * pressureRatio * 0.2f, 0.01f, 0.05f);
     }
 
     /// <summary>
