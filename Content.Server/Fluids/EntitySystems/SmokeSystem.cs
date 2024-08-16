@@ -405,21 +405,24 @@ public sealed class SmokeSystem : EntitySystem
     private void CreatePuddle(TileRef tile, Solution solution, float tileTemp, float tilePressure)
     {
         // Calculate the amount of solution to put in the puddle based on temperature and pressure
-        var puddleRatio = CalculatePuddleRatio(solution, tileTemp, tilePressure);
-        var puddleAmount = solution.Volume * puddleRatio;
-        var puddleSolution = solution.SplitSolution(puddleAmount);
+        var spillAmount = CalculateSpillAmount(solution, tileTemp, tilePressure);
+        var puddleSolution = solution.SplitSolution(spillAmount);
 
         _puddle.TrySpillAt(tile, puddleSolution, out _, false);
     }
 
-    private float CalculatePuddleRatio(Solution solution, float tileTemp, float tilePressure)
+    private float CalculateSpillAmount(Solution solution, float tileTemp, float tilePressure)
     {
         var avgBoilingPoint = GetAverageBoilingPoint(solution);
-        var tempRatio = Math.Clamp((avgBoilingPoint - tileTemp) / avgBoilingPoint, 0f, 1f);
-        var pressureRatio = Math.Clamp(tilePressure / Atmospherics.OneAtmosphere, 0f, 1f);
+        var tempFactor = Math.Clamp((avgBoilingPoint - tileTemp) / avgBoilingPoint, 0f, 1f);
 
-        // Combine temperature and pressure effects
-        return Math.Clamp(tempRatio * pressureRatio * 0.2f, 0.01f, 0.05f);
+        // Update the pressure factor to give a chance of 1 for pressure above 2 atmospheres
+        var pressureFactor = tilePressure > 2 * Atmospherics.OneAtmosphere ? 1f : Math.Clamp(tilePressure / Atmospherics.OneAtmosphere, 0f, 1f);
+
+        // Combine temperature and pressure effects directly to calculate the puddle amount
+        var puddleFactor = Math.Clamp(tempFactor * pressureFactor * 0.2f, 0.01f, 0.10f);
+
+        return solution.Volume.Float() * puddleFactor;
     }
 
     /// <summary>
