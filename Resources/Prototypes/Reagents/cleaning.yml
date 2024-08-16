@@ -32,7 +32,7 @@
   flavor: bitter
   color: "#c8ff69"
   recognizable: true
-  boilingPoint: 147.0 # Made this up, loosely based on bleach
+  boilingPoint: 323.15 # ~50C (50% water, 50% ammonium)
   meltingPoint: -11.0
   tileReactions:
     - !type:CleanTileReaction {}
