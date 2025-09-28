@@ -1,6 +1,8 @@
 using Content.Server.Body.Systems;
 using Content.Server.Chemistry.Components;
 using Content.Shared.Chemistry.EntitySystems;
+using Content.Shared.Chemistry.Reagent;
+using Content.Shared.FixedPoint;
 using Content.Shared.Body.Components;
 using Content.Shared.Chemistry.Events;
 using Content.Shared.Inventory;
@@ -135,8 +137,10 @@ public sealed class SolutionInjectOnCollideSystem : EntitySystem
         if (targetBloodstreams.Count == 0)
             return false;
 
+        var transferAmount = GetTransferAmount(injector, injectorSolution);
+
         // Extract total needed solution from the injector
-        var removedSolution = _solutionContainer.SplitSolution(injectorSolution.Value, injector.Comp.TransferAmount * targetBloodstreams.Count);
+        var removedSolution = _solutionContainer.SplitSolution(injectorSolution.Value, transferAmount * targetBloodstreams.Count);
         // Adjust solution amount based on transfer efficiency
         var solutionToInject = removedSolution.SplitSolution(removedSolution.Volume * injector.Comp.TransferEfficiency);
         // Calculate how much of the adjusted solution each target will get
@@ -154,5 +158,39 @@ public sealed class SolutionInjectOnCollideSystem : EntitySystem
 
         // Huzzah!
         return anySuccess;
+    }
+
+    private FixedPoint2 GetTransferAmount(Entity<BaseSolutionInjectOnEventComponent> injector, Entity<Shared.Chemistry.Components.SolutionComponent>? injectorSolution)
+    {
+        if (injectorSolution == null)
+            return FixedPoint2.Zero;
+
+        var transferAmount = injector.Comp.TransferAmount;
+
+        if (TryComp<MeleeChemicalInjectorComponent>(injector.Owner, out var meleeInjector) && meleeInjector.TransferOverrides.Count > 0)
+        {
+            var contents = injectorSolution.Value.Comp.Solution.Contents;
+            if (contents != null && contents.Count > 0)
+            {
+                var bestQuantity = FixedPoint2.Zero;
+                var foundOverride = false;
+
+                foreach (var entry in contents)
+                {
+                    var reagentId = new ProtoId<ReagentPrototype>(entry.Reagent.Prototype);
+                    if (!meleeInjector.TransferOverrides.TryGetValue(reagentId, out var overrideAmount))
+                        continue;
+
+                    if (foundOverride && entry.Quantity <= bestQuantity)
+                        continue;
+
+                    foundOverride = true;
+                    bestQuantity = entry.Quantity;
+                    transferAmount = overrideAmount;
+                }
+            }
+        }
+
+        return transferAmount;
     }
 }

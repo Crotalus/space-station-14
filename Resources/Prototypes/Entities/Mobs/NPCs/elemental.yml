@@ -308,10 +308,192 @@
       - !type:DoActsBehavior
         acts: [ "Destruction" ]
 
+- type: weightedRandomFillSolution
+  id: RandomFillReagentSlime
+  fills:
+  # common relative harmless stuff
+  - quantity: 100
+    weight: 100
+    reagents:
+    - Bananadine
+    - Beer
+    - Blood
+    - Cryptobiolin
+    - Fluorosurfactant
+    - FoamingAgent
+    - Happiness
+    - Holywater
+    - Honk
+    - InsectBlood
+    - Ipecac
+    - JuiceThatMakesYouWeh
+    - Laughter
+    - Licoxide
+    - Lipozine
+    - Mold
+    - RobustHarvest
+    - Sap
+    - Slime
+    - SpaceCleaner
+    - SpaceGlue
+    - SpaceDrugs
+    - SpaceLube
+    - THC
+    - UncookedAnimalProteins
+    - Vomit
+    - Water
+    - WeedKiller
+    - WeldingFuel
+
+  # meds
+  - quantity: 100
+    weight: 20
+    reagents:
+    - Bicaridine
+    - Bruizine
+    - Dermaline
+    - Inaprovaline
+    - Lacerinol
+    - Omnizine
+    - Tricordrazine
+
+  - quantity: 100
+    weight: 10
+    reagents:
+    - Arithrazine
+    - Desoxyephedrine
+    - Dexalin
+    - Ephedrine
+    - Epinephrine
+    - Kelotane
+    - Leporazine
+    - Oculine
+    - Phalanximine
+    - Puncturase
+    - Pyrazine
+    - Saline
+    - TranexamicAcid
+    - Ultravasculine
+
+  - quantity: 100
+    weight: 5
+    reagents:
+    - Aloxadone
+    - Barozine
+    - Benzene
+    - Cryoxadone
+    - DexalinPlus
+    - Haloperidol
+    - Ichor
+    - Insuzine
+    - Lye
+    - Phenol
+    - PolypyryliumOligomers
+    - PulpedBananaPeel
+    - Rororium
+    - Siderlac
+    - Sigynate
+    - SodiumHydroxide
+    - Stellibinin
+    - Stimulants
+    - Synaptizine
+
+  # elements
+  - quantity: 100
+    weight: 10
+    reagents:
+    - Aluminium
+    - Carbon
+    - Charcoal
+    - Chlorine
+    - Copper
+    - Fluorine
+    - Gold
+    - Hydrogen
+    - Iodine
+    - Iron
+    - Lithium
+    - Mercury
+    - Phosphorus
+    - Potassium
+    - Radium
+    - Silicon
+    - Silver
+    - Sodium
+    - Sulfur
+    - Uranium
+    - Zinc
+
+  # poisons
+  - quantity: 100
+    weight: 20
+    reagents:
+    - Allicin
+    - Amatoxin
+    - BuzzochloricBees
+    - Bungotoxin
+    - CarpoToxin
+    - ChloralHydrate
+    - Diphenhydramine
+    - GastroToxin
+    - HeartbreakerToxin
+    - Histamine
+    - Impedrezene
+    - MindbreakerToxin
+    - Mechanotoxin
+    - Nocturine
+    - Pax
+    - Psicodine
+    - Razorium
+    - Tazinide
+    - TearGas
+    - UnstableMutagen
+
+  - quantity: 100
+    weight: 10
+    reagents:
+    - Bleach
+    - Carpetium
+    - ChlorineTrifluoride
+    - FerrochromicAcid
+    - FluorosulfuricAcid
+    - Fresium
+    - Lead
+    - Lexorin
+    - Lipolicide
+    - MuteToxin
+    - Napalm
+    - NorepinephricAcid
+    - Phlogiston
+    - PolytrinicAcid
+    - SulfuricAcid
+    - Thermite
+    - Toxin
+    - Vestine
+
+  - quantity: 100
+    weight: 4
+    reagents:
+    - Ambuzol
+    - Artifexium
+    - Cognizine
+    - Doxarubixadone
+    - Necrosol
+    - Opporozidone
+
+  - quantity: 100
+    weight: 1
+    reagents:
+    - CorgiJuice
+
+  - quantity: 15
+    weight: 0.2
+    reagents:
+    - Romerol
+
 - type: entity
   name: reagent slime
   id: ReagentSlime
-  suffix: Water
   parent: [ MobAdultSlimes, MobCombat ]
   description: It consists of a liquid, and it wants to dissolve you in itself.
   components:
@@ -338,6 +520,12 @@
   - type: PointLight
     radius: 2.0
     energy: 3.5
+  - type: SolutionContainerManager
+    solutions:
+      bloodstream:
+        maxVol: 100
+  - type: RandomBloodstream
+    weightedRandomId: RandomFillReagentSlime
   - type: MobState
     allowedStates:
     - Alive
@@ -350,7 +538,8 @@
     speedModifierThresholds:
       50: 0.4
   - type: Bloodstream
-    bloodReagent: Water
+    bloodReagent: Slime
+    bloodMaxVolume: 100
     chemicalMaxVolume: 100
   - type: StatusEffects
     allowed:
@@ -365,6 +554,12 @@
   - type: MeleeChemicalInjector
     solution: bloodstream
     transferAmount: 5
+    transferOverrides:
+      CorgiJuice: 50
+      Psicodine: 30
+      Nocturine: 3
+      Pax: 1
+
   - type: DamageStateVisuals
     states:
       Alive:
@@ -386,131 +581,3 @@
   - type: DrainableSolution
     solution: bloodstream
 
-- type: entity
-  name: Reagent Slime Spawner
-  id: ReagentSlimeSpawner
-  parent: MarkerBase
-  components:
-    - type: Sprite
-      layers:
-        - state: red
-        - sprite: Mobs/Aliens/elemental.rsi
-          state: alive
-    - type: RandomSpawner
-      prototypes:
-        - ReagentSlime
-        - ReagentSlimeBeer
-        - ReagentSlimePax
-        - ReagentSlimeNocturine
-        - ReagentSlimeTHC
-        - ReagentSlimeBicaridine
-        - ReagentSlimeToxin
-        - ReagentSlimeNapalm
-        - ReagentSlimeOmnizine
-        - ReagentSlimeMuteToxin
-        - ReagentSlimeNorepinephricAcid
-        - ReagentSlimeEphedrine
-        - ReagentSlimeRobustHarvest
-      chance: 1
-
-- type: entity
-  id: ReagentSlimeBeer
-  parent: ReagentSlime
-  suffix: Beer
-  components:
-  - type: Bloodstream
-    bloodReagent: Beer
-
-- type: entity
-  id: ReagentSlimePax
-  parent: ReagentSlime
-  suffix: Pax
-  components:
-  - type: Bloodstream
-    bloodReagent: Pax
-  - type: MeleeChemicalInjector
-    solution: bloodstream
-    transferAmount: 1
-
-- type: entity
-  id: ReagentSlimeNocturine
-  parent: ReagentSlime
-  suffix: Nocturine
-  components:
-  - type: Bloodstream
-    bloodReagent: Nocturine
-  - type: MeleeChemicalInjector
-    solution: bloodstream
-    transferAmount: 3
-
-- type: entity
-  id: ReagentSlimeTHC
-  parent: ReagentSlime
-  suffix: THC
-  components:
-  - type: Bloodstream
-    bloodReagent: THC
-
-- type: entity
-  id: ReagentSlimeBicaridine
-  parent: ReagentSlime
-  suffix: Bicaridine
-  components:
-  - type: Bloodstream
-    bloodReagent: Bicaridine
-
-- type: entity
-  id: ReagentSlimeToxin
-  parent: ReagentSlime
-  suffix: Toxin
-  components:
-  - type: Bloodstream
-    bloodReagent: Toxin
-
-- type: entity
-  id: ReagentSlimeNapalm
-  parent: ReagentSlime
-  suffix: Napalm
-  components:
-  - type: Bloodstream
-    bloodReagent: Napalm
-
-- type: entity
-  id: ReagentSlimeOmnizine
-  parent: ReagentSlime
-  suffix: Omnizine
-  components:
-  - type: Bloodstream
-    bloodReagent: Omnizine
-
-- type: entity
-  id: ReagentSlimeMuteToxin
-  parent: ReagentSlime
-  suffix: Mute Toxin
-  components:
-  - type: Bloodstream
-    bloodReagent: MuteToxin
-
-- type: entity
-  id: ReagentSlimeNorepinephricAcid
-  parent: ReagentSlime
-  suffix: Norepinephric Acid
-  components:
-  - type: Bloodstream
-    bloodReagent: NorepinephricAcid
-
-- type: entity
-  id: ReagentSlimeEphedrine
-  parent: ReagentSlime
-  suffix: Ephedrine
-  components:
-  - type: Bloodstream
-    bloodReagent: Ephedrine
-
-- type: entity
-  id: ReagentSlimeRobustHarvest
-  parent: ReagentSlime
-  suffix: Robust Harvest
-  components:
-  - type: Bloodstream
-    bloodReagent: RobustHarvest

@@ -909,7 +909,7 @@
         maxAmount: 8
         maxRange: 2
       spawns:
-      - ReagentSlimeSpawner
+      - ReagentSlime
   - type: SolutionContainerManager
     solutions:
       anomaly:
