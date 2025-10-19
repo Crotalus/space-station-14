@@ -526,6 +526,8 @@
         maxVol: 100
   - type: RandomBloodstream
     weightedRandomId: RandomFillReagentSlime
+    bloodRefreshOverrides:
+        Romerol: 0
   - type: MobState
     allowedStates:
     - Alive

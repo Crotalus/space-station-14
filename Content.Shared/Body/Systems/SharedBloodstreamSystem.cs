@@ -504,4 +504,16 @@ public abstract class SharedBloodstreamSystem : EntitySystem
 
         return bloodData;
     }
+
+    /// <summary>
+    /// Overrides the passive blood regeneration amount.
+    /// </summary>
+    public void SetBloodRefreshAmount(Entity<BloodstreamComponent?> ent, FixedPoint2 amount)
+    {
+        if (!Resolve(ent, ref ent.Comp, logMissing: false))
+            return;
+
+        ent.Comp.BloodRefreshAmount = amount;
+        DirtyField(ent, ent.Comp, nameof(BloodstreamComponent.BloodRefreshAmount));
+    }
 }
