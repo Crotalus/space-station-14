@@ -166,6 +166,7 @@ public sealed partial class RoundEndSummaryWindow : DefaultWindow
         {
             Columns = 5, // Player Sprite, IC Name, Role, Player Type, OOC Name
             HorizontalExpand = true,
+            VerticalAlignment = VAlignment.Top,
         };
 
         RefreshPlayerList();
