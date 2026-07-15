@@ -31,7 +31,9 @@ public sealed partial class RoundEndSummaryWindow : DefaultWindow
         OOCName
     }
 
-    private SortField _currentSortField = SortField.PlayerType;
+    private const SortField DefaultSortField = SortField.PlayerType;
+
+    private SortField _currentSortField = DefaultSortField;
     private bool _sortDescending;
 
     public RoundEndSummaryWindow(string gm, string roundEnd, TimeSpan roundTimeSpan, int roundId, RoundEndPlayerInfo[] info)
@@ -217,13 +219,22 @@ public sealed partial class RoundEndSummaryWindow : DefaultWindow
     }
 
     /// <summary>
-    /// Handles sorting by the specified field, toggling direction if the same field is clicked
+    /// Handles sorting by the specified field. Repeated clicks on the same field cycle
+    /// ascending -> descending -> back to the default sort (antagonists on top, alphabetical).
     /// </summary>
     private void SortBy(SortField field)
     {
         if (_currentSortField == field)
         {
-            _sortDescending = !_sortDescending;
+            if (!_sortDescending)
+            {
+                _sortDescending = true;
+            }
+            else
+            {
+                _currentSortField = DefaultSortField;
+                _sortDescending = false;
+            }
         }
         else
         {
@@ -281,8 +292,7 @@ public sealed partial class RoundEndSummaryWindow : DefaultWindow
         {
             Text = playerInfo.PlayerICName ?? playerInfo.PlayerOOCName,
             VerticalAlignment = VAlignment.Center,
-            HorizontalExpand = true,
-            ClipText = true
+            HorizontalExpand = true
         };
 
         // Apply color coding for antagonists
@@ -303,8 +313,7 @@ public sealed partial class RoundEndSummaryWindow : DefaultWindow
         {
             Text = playerInfo.Observer ? "-" : Loc.GetString(playerInfo.Role),
             VerticalAlignment = VAlignment.Center,
-            HorizontalExpand = true,
-            ClipText = true
+            HorizontalExpand = true
         };
         _playerGrid.AddChild(roleLabel);
 
@@ -313,8 +322,7 @@ public sealed partial class RoundEndSummaryWindow : DefaultWindow
         {
             Text = GetPlayerTypeText(playerInfo),
             VerticalAlignment = VAlignment.Center,
-            HorizontalExpand = true,
-            ClipText = true
+            HorizontalExpand = true
         };
 
         // Apply color coding based on player type
@@ -334,8 +342,7 @@ public sealed partial class RoundEndSummaryWindow : DefaultWindow
         {
             Text = playerInfo.PlayerOOCName,
             VerticalAlignment = VAlignment.Center,
-            HorizontalExpand = true,
-            ClipText = true
+            HorizontalExpand = true
         };
 
         _playerGrid.AddChild(oocNameLabel);
@@ -395,10 +402,6 @@ public sealed partial class RoundEndSummaryWindow : DefaultWindow
             ? players.OrderByDescending(primaryKey).ThenByDescending(SecondaryKey)
             : players.OrderBy(primaryKey).ThenBy(SecondaryKey);
     }
-
-    /// <summary>
-    /// Gets a sort key for player type to ensure consistent ordering: Antagonist -> Crew -> Observer
-    /// </summary>
 
     /// <summary>
     /// Checks if a player matches the current search filter
