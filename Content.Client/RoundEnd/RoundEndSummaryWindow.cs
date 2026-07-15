@@ -1,6 +1,7 @@
 using System.Linq;
 using System.Numerics;
 using Content.Client.Message;
+using Content.Client.UserInterface.Controls;
 using RoundEndPlayerInfo = Content.Shared.GameTicking.RoundEndMessageEvent.RoundEndPlayerInfo;
 using Robust.Client.UserInterface;
 using Robust.Client.UserInterface.Controls;
@@ -19,7 +20,7 @@ public sealed partial class RoundEndSummaryWindow : DefaultWindow
 
     public int RoundId;
     private readonly RoundEndPlayerInfo[] _playersInfo;
-    private GridContainer _playerGrid = null!;
+    private TableContainer _playerTable = null!;
     private readonly List<SortButton> _sortButtons = [];
     private string _searchText = string.Empty;
 
@@ -146,49 +147,14 @@ public sealed partial class RoundEndSummaryWindow : DefaultWindow
         searchContainer.AddChild(searchBar);
         playerManifestTab.AddChild(searchContainer);
 
-        // Header with sort buttons
-        var headerContainer = new BoxContainer
-        {
-            Orientation = LayoutOrientation.Horizontal,
-            Margin = new Thickness(10, 5, 10, 5)
-        };
-
-        var icNameButton = CreateSortButton("round-end-summary-window-player-manifest-tab-sort-character", SortField.ICName);
-        var roleButton = CreateSortButton("round-end-summary-window-player-manifest-tab-sort-role", SortField.Role);
+        // Sort buttons, added to the table as its header row so they share the column widths.
+        // Creation order matches the column order.
+        CreateSortButton("round-end-summary-window-player-manifest-tab-sort-character", SortField.ICName);
+        CreateSortButton("round-end-summary-window-player-manifest-tab-sort-role", SortField.Role);
         var playerTypeButton = CreateSortButton("round-end-summary-window-player-manifest-tab-sort-player-type", SortField.PlayerType);
-        var oocNameButton = CreateSortButton("round-end-summary-window-player-manifest-tab-sort-player", SortField.OOCName);
+        CreateSortButton("round-end-summary-window-player-manifest-tab-sort-player", SortField.OOCName);
 
         playerTypeButton.SetSortIndicator(true);
-        headerContainer.AddChild(icNameButton);
-
-        // Add small spacer between buttons
-        headerContainer.AddChild(new Control
-        {
-            MinSize = new Vector2(5, 1),
-            HorizontalExpand = false
-        });
-
-        headerContainer.AddChild(roleButton);
-
-        // Add small spacer between buttons
-        headerContainer.AddChild(new Control
-        {
-            MinSize = new Vector2(5, 1),
-            HorizontalExpand = false
-        });
-
-        headerContainer.AddChild(playerTypeButton);
-
-        // Add small spacer between buttons
-        headerContainer.AddChild(new Control
-        {
-            MinSize = new Vector2(5, 1),
-            HorizontalExpand = false
-        });
-
-        headerContainer.AddChild(oocNameButton);
-
-        playerManifestTab.AddChild(headerContainer);
 
         var scrollContainer = new ScrollContainer
         {
@@ -196,15 +162,15 @@ public sealed partial class RoundEndSummaryWindow : DefaultWindow
             Margin = new Thickness(10, 0, 10, 10),
         };
 
-        _playerGrid = new GridContainer
+        _playerTable = new TableContainer
         {
-            Columns = 6, // Player Sprite,IC Name,Role,Player Type,OOC Name
+            Columns = 5, // Player Sprite, IC Name, Role, Player Type, OOC Name
             HorizontalExpand = true,
         };
 
         RefreshPlayerList();
 
-        scrollContainer.AddChild(_playerGrid);
+        scrollContainer.AddChild(_playerTable);
         playerManifestTab.AddChild(scrollContainer);
 
         return playerManifestTab;
@@ -251,11 +217,19 @@ public sealed partial class RoundEndSummaryWindow : DefaultWindow
     }
 
     /// <summary>
-    /// Refreshes the player list grid by clearing it and repopulating with sorted player data
+    /// Refreshes the player list table by clearing it and repopulating with the header row
+    /// followed by sorted player data
     /// </summary>
     private void RefreshPlayerList()
     {
-        _playerGrid.RemoveAllChildren();
+        _playerTable.RemoveAllChildren();
+
+        // Header row: empty cell over the sprite column, then the sort buttons.
+        _playerTable.AddChild(new Control());
+        foreach (var button in _sortButtons)
+        {
+            _playerTable.AddChild(button);
+        }
 
         var sortedPlayers = GetSortedPlayers();
         foreach (var playerInfo in sortedPlayers)
@@ -269,10 +243,13 @@ public sealed partial class RoundEndSummaryWindow : DefaultWindow
     /// </summary>
     private void AddPlayerRow(RoundEndPlayerInfo playerInfo)
     {
+        // Horizontal margin providing the gap between columns; the table itself packs cells flush.
+        var cellMargin = new Thickness(6, 0);
+
         // Player Sprite column
         if (playerInfo.PlayerNetEntity != null)
         {
-            _playerGrid.AddChild(new SpriteView(playerInfo.PlayerNetEntity.Value, _entityManager)
+            _playerTable.AddChild(new SpriteView(playerInfo.PlayerNetEntity.Value, _entityManager)
             {
                 OverrideDirection = Direction.South,
                 VerticalAlignment = VAlignment.Center,
@@ -281,7 +258,7 @@ public sealed partial class RoundEndSummaryWindow : DefaultWindow
         }
         else
         {
-            _playerGrid.AddChild(new Control
+            _playerTable.AddChild(new Control
             {
                 SetSize = new Vector2(32, 32),
             });
@@ -292,7 +269,7 @@ public sealed partial class RoundEndSummaryWindow : DefaultWindow
         {
             Text = playerInfo.PlayerICName ?? playerInfo.PlayerOOCName,
             VerticalAlignment = VAlignment.Center,
-            HorizontalExpand = true
+            Margin = cellMargin
         };
 
         // Apply color coding for antagonists
@@ -301,28 +278,23 @@ public sealed partial class RoundEndSummaryWindow : DefaultWindow
             icNameLabel.FontColorOverride = Color.Red;
         }
 
-        _playerGrid.AddChild(icNameLabel);
-
-        _playerGrid.AddChild(new Control
-        {
-            SetSize = new Vector2(32, 32),
-        });
+        _playerTable.AddChild(icNameLabel);
 
         // Role column
         var roleLabel = new Label
         {
             Text = playerInfo.Observer ? "-" : Loc.GetString(playerInfo.Role),
             VerticalAlignment = VAlignment.Center,
-            HorizontalExpand = true
+            Margin = cellMargin
         };
-        _playerGrid.AddChild(roleLabel);
+        _playerTable.AddChild(roleLabel);
 
         // Player Type column
         var playerTypeLabel = new Label
         {
             Text = GetPlayerTypeText(playerInfo),
             VerticalAlignment = VAlignment.Center,
-            HorizontalExpand = true
+            Margin = cellMargin
         };
 
         // Apply color coding based on player type
@@ -335,17 +307,17 @@ public sealed partial class RoundEndSummaryWindow : DefaultWindow
             playerTypeLabel.FontColorOverride = Color.Gray;
         }
 
-        _playerGrid.AddChild(playerTypeLabel);
+        _playerTable.AddChild(playerTypeLabel);
 
         // OOC Name column
         var oocNameLabel = new Label
         {
             Text = playerInfo.PlayerOOCName,
             VerticalAlignment = VAlignment.Center,
-            HorizontalExpand = true
+            Margin = cellMargin
         };
 
-        _playerGrid.AddChild(oocNameLabel);
+        _playerTable.AddChild(oocNameLabel);
     }
 
     /// <summary>
