@@ -53,9 +53,63 @@ public class TableContainer : Container
         }
     }
 
+    private float[]? _forcedColumnWidths;
+    private float[]? _minColumnWidths;
+    private float[]? _lastColumnWidths;
+
+    /// <summary>
+    /// When set (length must equal <see cref="Columns"/>), columns are laid out at exactly these widths
+    /// instead of being calculated from content. Used to keep a separate header table aligned with a
+    /// scrolling body table via <see cref="OnColumnWidthsChanged"/>.
+    /// </summary>
+    public float[]? ForcedColumnWidths
+    {
+        get => _forcedColumnWidths;
+        set
+        {
+            _forcedColumnWidths = value;
+            InvalidateMeasure();
+        }
+    }
+
+    /// <summary>
+    /// Optional per-column minimum widths (length must equal <see cref="Columns"/>).
+    /// Columns are sized as if their content asked for at least this much width.
+    /// </summary>
+    public float[]? MinColumnWidths
+    {
+        get => _minColumnWidths;
+        set
+        {
+            _minColumnWidths = value;
+            InvalidateMeasure();
+        }
+    }
+
+    /// <summary>
+    /// Fired during layout whenever the arranged column widths change.
+    /// The array is owned by the table; do not mutate it.
+    /// </summary>
+    public event Action<float[]>? OnColumnWidthsChanged;
+
     protected override Vector2 MeasureOverride(Vector2 availableSize)
     {
         ResetCachedArrays();
+
+        if (_forcedColumnWidths is { } forced && forced.Length == _columns)
+        {
+            // Externally-dictated column widths: skip content measuring entirely.
+            var totalForcedWidth = 0f;
+            for (var c = 0; c < _columns; c++)
+            {
+                ref var column = ref _columnDataCache[c];
+                column.MaxWidth = column.MinWidth = column.AssignedWidth = forced[c];
+                column.Slack = 0;
+                totalForcedWidth += forced[c];
+            }
+
+            return new Vector2(Math.Min(availableSize.X, totalForcedWidth), MeasureRows());
+        }
 
         // Do a first pass measuring all child controls as if they're given infinite space.
         // This gives us a maximum width the columns want, which we use to proportion them later.
@@ -70,6 +124,16 @@ public class TableContainer : Container
             columnIdx += 1;
             if (columnIdx == _columns)
                 columnIdx = 0;
+        }
+
+        // Apply externally-requested minimum column widths.
+        if (_minColumnWidths is { } minWidths && minWidths.Length == _columns)
+        {
+            for (var c = 0; c < _columns; c++)
+            {
+                ref var column = ref _columnDataCache[c];
+                column.MaxWidth = Math.Max(column.MaxWidth, minWidths[c]);
+            }
         }
 
         // Calculate Slack and MinWidth for all columns. Also calculate sums for all columns.
@@ -121,11 +185,18 @@ public class TableContainer : Container
             }
         }
 
-        // Go over controls for a second measuring pass, this time giving them their assigned measure width.
-        // This will give us a height to slot into per-row data.
-        // We still measure assuming infinite vertical space.
-        // This control can't properly handle being constrained on the Y axis.
-        columnIdx = 0;
+        return new Vector2(Math.Min(availableSize.X, totalMaxWidth), MeasureRows());
+    }
+
+    /// <summary>
+    /// Go over controls for a second measuring pass, this time giving them their assigned measure width.
+    /// This gives us a height to slot into per-row data. We still measure assuming infinite vertical space.
+    /// This control can't properly handle being constrained on the Y axis.
+    /// </summary>
+    /// <returns>The total measured height of all rows.</returns>
+    private float MeasureRows()
+    {
+        var columnIdx = 0;
         var rowIdx = 0;
         foreach (var child in Children)
         {
@@ -151,7 +222,7 @@ public class TableContainer : Container
             totalHeight += row.MeasuredHeight;
         }
 
-        return new Vector2(Math.Min(availableSize.X, totalMaxWidth), totalHeight);
+        return totalHeight;
     }
 
     protected override Vector2 ArrangeOverride(Vector2 finalSize)
@@ -177,12 +248,15 @@ public class TableContainer : Container
         {
             ref var column = ref _columnDataCache[c];
 
-            var slackRatio = column.Slack / totalSlack;
+            // No slack anywhere (e.g. forced column widths): columns stay at their minimum.
+            var slackRatio = totalSlack > 0 ? column.Slack / totalSlack : 0f;
             column.ArrangedWidth = column.MinWidth + slackRatio * assignableWidth;
             column.ArrangedX = xPos;
 
             xPos += column.ArrangedWidth;
         }
+
+        NotifyColumnWidthsChanged();
 
         // Do actual arrangement row-by-row.
         var arrangeY = 0f;
@@ -206,6 +280,41 @@ public class TableContainer : Container
         }
 
         return finalSize with { Y = arrangeY };
+    }
+
+    /// <summary>
+    /// Fires <see cref="OnColumnWidthsChanged"/> if the arranged column widths differ from the last layout pass.
+    /// </summary>
+    private void NotifyColumnWidthsChanged()
+    {
+        if (OnColumnWidthsChanged == null)
+            return;
+
+        var changed = _lastColumnWidths == null || _lastColumnWidths.Length != _columns;
+        if (!changed)
+        {
+            for (var c = 0; c < _columns; c++)
+            {
+                if (Math.Abs(_lastColumnWidths![c] - _columnDataCache[c].ArrangedWidth) > 0.01f)
+                {
+                    changed = true;
+                    break;
+                }
+            }
+        }
+
+        if (!changed)
+            return;
+
+        if (_lastColumnWidths == null || _lastColumnWidths.Length != _columns)
+            _lastColumnWidths = new float[_columns];
+
+        for (var c = 0; c < _columns; c++)
+        {
+            _lastColumnWidths[c] = _columnDataCache[c].ArrangedWidth;
+        }
+
+        OnColumnWidthsChanged.Invoke(_lastColumnWidths);
     }
 
     /// <summary>

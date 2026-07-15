@@ -28,7 +28,7 @@ public sealed partial class RoundEndSummaryUIController : UIController,
         }
         else
         {
-            _window.OpenCenteredRight();
+            _window.OpenCentered();
             _window.MoveToFront();
         }
     }

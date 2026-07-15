@@ -21,8 +21,12 @@ public sealed partial class RoundEndSummaryWindow : DefaultWindow
     public int RoundId;
     private readonly RoundEndPlayerInfo[] _playersInfo;
     private TableContainer _playerTable = null!;
+    private TableContainer _headerTable = null!;
     private readonly List<SortButton> _sortButtons = [];
     private string _searchText = string.Empty;
+
+    // Player Sprite, IC Name, Role, Player Type, OOC Name
+    private const int ManifestColumns = 5;
 
     private enum SortField
     {
@@ -42,7 +46,8 @@ public sealed partial class RoundEndSummaryWindow : DefaultWindow
         IoCManager.InjectDependencies(this);
         _playersInfo = info;
 
-        MinSize = SetSize = new Vector2(720, 580);
+        MinSize = new Vector2(640, 480);
+        SetSize = new Vector2(880, 620);
 
         Title = Loc.GetString("round-end-summary-window-title");
 
@@ -59,7 +64,7 @@ public sealed partial class RoundEndSummaryWindow : DefaultWindow
 
         ContentsContainer.AddChild(roundEndTabs);
 
-        OpenCenteredRight();
+        OpenCentered();
         MoveToFront();
     }
 
@@ -147,7 +152,7 @@ public sealed partial class RoundEndSummaryWindow : DefaultWindow
         searchContainer.AddChild(searchBar);
         playerManifestTab.AddChild(searchContainer);
 
-        // Sort buttons, added to the table as its header row so they share the column widths.
+        // Sort buttons live in a separate header table pinned above the scroll area.
         // Creation order matches the column order.
         CreateSortButton("round-end-summary-window-player-manifest-tab-sort-character", SortField.ICName);
         CreateSortButton("round-end-summary-window-player-manifest-tab-sort-role", SortField.Role);
@@ -155,6 +160,29 @@ public sealed partial class RoundEndSummaryWindow : DefaultWindow
         CreateSortButton("round-end-summary-window-player-manifest-tab-sort-player", SortField.OOCName);
 
         playerTypeButton.SetSortIndicator(true);
+
+        _headerTable = new TableContainer
+        {
+            Columns = ManifestColumns,
+        };
+
+        // Empty cell over the sprite column.
+        _headerTable.AddChild(new Control());
+        foreach (var button in _sortButtons)
+        {
+            button.Margin = new Thickness(6, 0);
+            _headerTable.AddChild(button);
+        }
+
+        // Clipping wrapper: when the body scrolls horizontally the header table is shifted left
+        // via a negative margin, and whatever sticks out is clipped here.
+        var headerClip = new Control
+        {
+            RectClipContent = true,
+            Margin = new Thickness(10, 5, 10, 0),
+        };
+        headerClip.AddChild(_headerTable);
+        playerManifestTab.AddChild(headerClip);
 
         var scrollContainer = new ScrollContainer
         {
@@ -164,9 +192,18 @@ public sealed partial class RoundEndSummaryWindow : DefaultWindow
 
         _playerTable = new TableContainer
         {
-            Columns = 5, // Player Sprite, IC Name, Role, Player Type, OOC Name
+            Columns = ManifestColumns,
             HorizontalExpand = true,
             VerticalAlignment = VAlignment.Top,
+        };
+
+        // Keep the pinned header aligned with the body columns, in both width and horizontal scroll.
+        _playerTable.OnColumnWidthsChanged += OnBodyColumnWidthsChanged;
+        scrollContainer.OnScrolled += () =>
+        {
+            var margin = new Thickness(-scrollContainer.HScroll, 0, 0, 0);
+            if (!_headerTable.Margin.Equals(margin))
+                _headerTable.Margin = margin;
         };
 
         RefreshPlayerList();
@@ -175,6 +212,30 @@ public sealed partial class RoundEndSummaryWindow : DefaultWindow
         playerManifestTab.AddChild(scrollContainer);
 
         return playerManifestTab;
+    }
+
+    /// <summary>
+    /// Syncs the pinned header table's column widths to the body table's.
+    /// </summary>
+    private void OnBodyColumnWidthsChanged(float[] widths)
+    {
+        // Body columns must never be narrower than their header buttons,
+        // otherwise the forced-width header cells would overlap each other.
+        if (_playerTable.MinColumnWidths == null)
+        {
+            var minWidths = new float[widths.Length];
+            var i = 0;
+            foreach (var child in _headerTable.Children)
+            {
+                if (i == minWidths.Length)
+                    break;
+                minWidths[i++] = child.DesiredSize.X;
+            }
+
+            _playerTable.MinColumnWidths = minWidths;
+        }
+
+        _headerTable.ForcedColumnWidths = widths;
     }
 
     private SortButton CreateSortButton(string text, SortField field)
@@ -218,19 +279,11 @@ public sealed partial class RoundEndSummaryWindow : DefaultWindow
     }
 
     /// <summary>
-    /// Refreshes the player list table by clearing it and repopulating with the header row
-    /// followed by sorted player data
+    /// Refreshes the player list table by clearing it and repopulating with sorted player data
     /// </summary>
     private void RefreshPlayerList()
     {
         _playerTable.RemoveAllChildren();
-
-        // Header row: empty cell over the sprite column, then the sort buttons.
-        _playerTable.AddChild(new Control());
-        foreach (var button in _sortButtons)
-        {
-            _playerTable.AddChild(button);
-        }
 
         var sortedPlayers = GetSortedPlayers();
         foreach (var playerInfo in sortedPlayers)
