@@ -245,22 +245,24 @@ public sealed partial class RevenantSystem
         args.Handled = true;
 
         var xform = Transform(uid);
-        if (!TryComp<MapGridComponent>(xform.GridUid, out var map))
-            return;
-        var tiles = _mapSystem.GetTilesIntersecting(
-            xform.GridUid.Value,
-            map,
-            Box2.CenteredAround(_transformSystem.GetWorldPosition(xform),
-            new Vector2(component.DefileRadius * 2, component.DefileRadius)))
-            .ToArray();
 
-        _random.Shuffle(tiles);
-
-        for (var i = 0; i < component.DefileTilePryAmount; i++)
+        if (TryComp<MapGridComponent>(xform.GridUid, out var map))
         {
-            if (!tiles.TryGetValue(i, out var value))
-                continue;
-            _tile.PryTile(value);
+            var tiles = _mapSystem.GetTilesIntersecting(
+                xform.GridUid.Value,
+                map,
+                Box2.CenteredAround(_transformSystem.GetWorldPosition(xform),
+                new Vector2(component.DefileRadius * 2, component.DefileRadius)))
+                .ToArray();
+
+            _random.Shuffle(tiles);
+
+            for (var i = 0; i < component.DefileTilePryAmount; i++)
+            {
+                if (!tiles.TryGetValue(i, out var value))
+                    continue;
+                _tile.PryTile(value);
+            }
         }
 
         var lookup = _lookup.GetEntitiesInRange(uid, component.DefileRadius, LookupFlags.Approximate | LookupFlags.Static);
