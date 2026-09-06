@@ -1,4 +1,5 @@
 using Content.Server.Light.EntitySystems;
+using Content.Shared.Body.Systems;
 using Content.Shared.Chemistry.Components;
 using Content.Shared.Chemistry.EntitySystems;
 using Content.Shared.Sprite;
@@ -22,11 +23,11 @@ public sealed partial class ReagentColorSystem : EntitySystem
     public override void Initialize()
     {
         base.Initialize();
-        SubscribeLocalEvent<ReagentColorComponent, ComponentStartup>(OnStartup);
+        SubscribeLocalEvent<ReagentColorComponent, MapInitEvent>(OnMapInit, after: [typeof(BloodstreamSystem)]);
         SubscribeLocalEvent<ReagentColorComponent, SolutionChangedEvent>(OnSolutionChanged);
     }
 
-    private void OnStartup(Entity<ReagentColorComponent> entity, ref ComponentStartup args)
+    private void OnMapInit(Entity<ReagentColorComponent> entity, ref MapInitEvent args)
     {
         UpdateColor(entity);
     }
